@@ -28,5 +28,6 @@ module.exports = {
         allow: ["_id"],
       },
     ],
+    "import/no-unresolved": [2, { ignore: ["mailgun.js"] }],
   },
 };
