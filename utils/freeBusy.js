@@ -5,7 +5,7 @@
   and hopefully organize it a bit better
 
   Simple call "freeBusy = new FreeBusy()" with the necessary arguments, and then "freebusy.process()"
-  to return the result of all the scheduling magic
+  to return the result of all the scheduling magic.
 */
 
 const { OAuth2Client } = require("google-auth-library");
