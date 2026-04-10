@@ -2,13 +2,13 @@
   "name": "rolltogether-backend",
   "version": "0.1.0",
   "description": "Roll Together Back End",
-  "homepage": "https://github.com/joepotenza/se_project_express#readme",
+  "homepage": "https://api.rolltogether.online",
   "bugs": {
-    "url": "https://github.com/joepotenza/se_project_express/issues"
+    "url": "https://github.com/joepotenza/rolltogether-backend/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joepotenza/se_project_express.git"
+    "url": "git+https://github.com/joepotenza/rolltogether-backend.git"
   },
   "license": "ISC",
   "author": "Joe Potenza",

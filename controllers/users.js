@@ -23,7 +23,8 @@ const ForbiddenError = require("../errors/ForbiddenError");
 // const { sendEmailMessage } = require("../utils/email");
 const FreeBusy = require("../utils/FreeBusy");
 
-const { JWT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+const { JWT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, INVITE_CODE } =
+  process.env;
 
 const oAuth2Client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
@@ -180,11 +181,11 @@ const createUser = (req, res, next) => {
     if (!password) {
       throw new BadRequestError("Invalid Data");
     }
-    /*
-      if (!invite || invite !=== "LETMEIN") {
+
+    if (INVITE_CODE && (!invite || invite !== INVITE_CODE)) {
       throw new ForbiddenError("Invalid Invite Code");
     }
-    */
+
     // hash the password before storing in the database
     bcrypt
       .hash(password, 10) // 10-character salt
