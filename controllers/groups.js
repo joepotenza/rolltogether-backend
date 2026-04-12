@@ -14,7 +14,9 @@
 
 const mongoose = require("mongoose");
 const Session = require("../models/session");
-const System = require("../models/system");
+/* eslint-disable no-unused-vars */
+const System = require("../models/system"); // This is here just to ensure the system model is loaded into mongoose
+/* eslint-disable no-unused-vars */
 const Application = require("../models/application");
 const Group = require("../models/group");
 
@@ -24,7 +26,9 @@ const NotFoundError = require("../errors/NotFoundError");
 const ConflictError = require("../errors/ConflictError");
 const UnauthorizedError = require("../errors/UnauthorizedError");
 
-// const { sendEmailMessage } = require("../utils/email");
+const { sendEmailMessage } = require("../utils/email");
+
+const { FRONTEND_URL } = process.env;
 
 // GET /groups -- Get a list of groups
 // (LOTS of filtering here. Comments below.)
@@ -316,24 +320,18 @@ const submitApplication = (req, res, next) => {
           },
           { new: true }
         )
+          .populate("owner", "email")
           .lean()
           .orFail()
-          .then((/* group */) => {
-            /*
-            Email the owner about the new application
-              Group.findById(groupId)
-                .populate("owner", "email")
-                .then(() => {
-                  sendEmailMessage(
-                    group.owner.email,
-                    "New Application for your group!",
-                    `You have a new application for your group ${group.name}!`
-                  );
-                })
-                .catch((err) => {
-                  next(err);
-                });
-                */
+          .then((group) => {
+            // Email the owner about the new application
+            sendEmailMessage({
+              to: group.owner.email,
+              subject: "New Application for your group!",
+              text: `You have a new application for your group ${group.name}! Visit ${FRONTEND_URL}/group/${groupId} to view the application`,
+              html: `<p>You have a new application for your group ${group.name}!</p><p><a href="${FRONTEND_URL}/group/${groupId}">Click here to view the application</a></p>`,
+            });
+
             res.status(201).send(app);
           })
           .catch((err) => {
@@ -462,7 +460,7 @@ const updateApplicationStatus = (req, res, next) => {
     const user = req.user._id;
     // First find the group and make sure the current user is the owner
     Group.findById(req.params.groupId)
-      .select("owner slots")
+      .select("name owner slots")
       .orFail()
       .then((group) => {
         if (!group) {
@@ -485,13 +483,13 @@ const updateApplicationStatus = (req, res, next) => {
           .populate("user", "username avatar email isGoogleConnected")
           .then((app) => {
             if (status !== "approved") {
-              /* application was not approved, notify the user and return the application and group info
-              sendEmailMessage(
-                app.user.email,
-                "Your application has been declined",
-                `<p>Your application has been declined for group ${group.name}. Here is the response from the GM:</p><p>${response}</p>`
-              );
-              */
+              // application was not approved, notify the user and return the application and group info
+              sendEmailMessage({
+                to: app.user.email,
+                subject: "Your application has been declined",
+                text: `Your application has been declined for group ${group.name}. Here is the response from the GM: ${response}`,
+                html: `<p>Your application has been declined for group ${group.name}. Here is the response from the GM:</p><p>${response}</p>`,
+              });
               res.status(200).send({
                 group,
                 app,
@@ -510,11 +508,12 @@ const updateApplicationStatus = (req, res, next) => {
                 .orFail()
                 .then((updatedGroup) => {
                   // all done, email the user about their successful application and return the application and group info
-                  /* sendEmailMessage(
-                    app.user.email,
-                    "Your application has been approved!",
-                    `<p>Your application has been approved for group ${group.name}! Here is the response from the GM:</p><p>${response}</p>`
-                  ); */
+                  sendEmailMessage({
+                    to: app.user.email,
+                    subject: "Your application has been approved!",
+                    text: `Your application has been approved for group ${group.name}! Here is the response from the GM: ${response}`,
+                    html: `<p>Your application has been approved for group ${group.name}! Here is the response from the GM:</p><p>${response}</p>`,
+                  });
                   res.status(200).send({
                     group: updatedGroup,
                     app,

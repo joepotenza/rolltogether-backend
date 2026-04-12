@@ -9,12 +9,12 @@ const { Joi, celebrate } = require("celebrate");
 const mongoose = require("mongoose");
 const isSvg = require("is-svg").default;
 
-const validateURL = (value, helpers) => {
+/* const validateURL = (value, helpers) => {
   if (validator.isURL(value)) {
     return value;
   }
   return helpers.error("string.uri");
-};
+}; */
 
 const validateSVG = (value, helpers) => {
   try {

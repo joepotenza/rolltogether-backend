@@ -26,6 +26,7 @@ module.exports = {
       "error",
       {
         allow: ["_id"],
+        allowAfterThis: true,
       },
     ],
     "import/no-unresolved": [2, { ignore: ["mailgun.js"] }],

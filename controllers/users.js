@@ -394,8 +394,8 @@ const freebusy = (req, res, next) => {
     // Automatically adjust end date by 1 day
     // (UI date picker will always give us the wrong info, if you select Monday - Friday, it's going to cut off at Friday 0:00:00
     // when you really need Friday 23:59:59
-    let startDate = new Date(start);
-    let endDate = new Date(end);
+    const startDate = new Date(start);
+    const endDate = new Date(end);
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
     // Get the group from groupId
@@ -413,8 +413,8 @@ const freebusy = (req, res, next) => {
       .orFail()
       .then(async (grp) => {
         // Check if current user is owner
-        grp.owner._id = grp.owner._id.toString();
-        if (!grp.owner._id === req.user._id) {
+        const ownerId = grp.owner._id.toString();
+        if (!ownerId === req.user._id) {
           console.log("User is not owner!");
           next(new ForbiddenError("You are not the owner of this group"));
         } else {
@@ -422,10 +422,10 @@ const freebusy = (req, res, next) => {
           const disconnectedUsers = []; // array of users requested who for some reason don't have a token or are revoked
           const allUsers = []; // usernames of ALL users, so we can properly return unavailableUsers for ones who were disconnected
           // Loop over requested user Ids
-          for (let i = 0; i < userIds.length; i++) {
+          for (let i = 0; i < userIds.length; i += 1) {
             const user = userIds[i];
 
-            if (grp.owner._id === user) {
+            if (ownerId === user) {
               // user is owner
               if (
                 grp.owner.googleRefreshToken &&
@@ -444,7 +444,7 @@ const freebusy = (req, res, next) => {
             } else {
               // search members for the user
               let found = false;
-              for (let m = 0; m < grp.members.length; m++) {
+              for (let m = 0; m < grp.members.length; m += 1) {
                 const member = grp.members[m];
                 member._id = member._id.toString();
                 if (member._id === user) {

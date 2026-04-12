@@ -37,8 +37,6 @@ const createSession = (req, res, next) => {
           // User does not own this group
           next(new ForbiddenError("Forbidden"));
         } else {
-          // Add sessions to the array, and return the full session list
-
           Session.create({
             group,
             name,
@@ -48,7 +46,14 @@ const createSession = (req, res, next) => {
             areNotesVisibleToMembers,
             attendees,
           })
-            .then((session) => res.status(201).send(session))
+            .then((session) => {
+              console.log("session added");
+              Group.findByIdAndUpdate(group, {
+                $addToSet: { sessions: session._id },
+              })
+                .then((/* grp */) => res.status(201).send(session))
+                .catch((err) => next(err));
+            })
             .catch((err) => {
               if (err.name === "ValidationError") {
                 next(new BadRequestError("Invalid Data"));
@@ -155,11 +160,20 @@ const deleteSession = (req, res, next) => {
           // not the owner
           next(new ForbiddenError("Forbidden"));
         } else {
-          Session.deleteOne();
           Session.findByIdAndDelete(sessionId)
             .orFail()
-            .then((/* sess */) =>
-              res.status(200).send({ message: "Session deleted successfully" }))
+            .then((/* sess */) => {
+              Group.findByIdAndUpdate(session.group._id, {
+                $pull: { sessions: sessionId },
+              })
+                .orFail()
+                .then(() =>
+                  res
+                    .status(200)
+                    .send({ message: "Session deleted successfully" })
+                )
+                .catch((err) => next(err));
+            })
             .catch((err) => next(err));
         }
       })

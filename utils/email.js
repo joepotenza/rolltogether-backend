@@ -5,9 +5,10 @@
 */
 const FormData = require("form-data");
 const Mailgun = require("mailgun.js");
+
 const { MAILGUN_API_KEY, MAILGUN_DOMAIN, MAILGUN_SENDER } = process.env;
 
-function sendEmailMessage(to, subject, text) {
+function sendEmailMessage({ to, subject, text, html }) {
   const mailgun = new Mailgun(FormData);
   const mg = mailgun.client({
     username: "api",
@@ -19,10 +20,11 @@ function sendEmailMessage(to, subject, text) {
       to: [to],
       subject,
       text,
+      html,
     });
     return data;
   } catch (error) {
-    return Promise.reject(error);
+    console.error(error);
   }
 }
 

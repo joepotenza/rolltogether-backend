@@ -29,7 +29,7 @@ const { PORT = 3001, MONGO_URI } = process.env;
 const NotFoundError = require("./errors/NotFoundError");
 const errorHandler = require("./middlewares/error-handler");
 const { requestLogger, errorLogger } = require("./middlewares/logger");
-const addArtificialDelay = require("./middlewares/delay");
+// const addArtificialDelay = require("./middlewares/delay");
 
 // Rate Limiter
 const limiter = rateLimit(RATE_LIMITER_CONFIG);

@@ -9,8 +9,123 @@
 */
 
 const { OAuth2Client } = require("google-auth-library");
-const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+
 const BadRequestError = require("../errors/BadRequestError");
+
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+
+// gets an OAuth2Client instance (this way we can have multiple)
+const getOAuth2Client = () =>
+  new OAuth2Client(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    "postmessage" // Specific value required for GIS popup flow
+  );
+
+// refineSlices: Filters slices based on a specific daily time window (e.g., 7pm-11pm)
+const refineSlices = (slices, dailyStartHour, dailyEndHour) => {
+  const refined = [];
+  const crossesMidnight = dailyEndHour < dailyStartHour;
+
+  slices.forEach((slice) => {
+    const sliceStart = new Date(slice.start);
+    const sliceEnd = new Date(slice.end);
+
+    const startDateOnly = new Date(sliceStart);
+    startDateOnly.setUTCHours(0, 0, 0, 0);
+
+    const endDateOnly = new Date(sliceEnd);
+    endDateOnly.setUTCHours(0, 0, 0, 0);
+
+    for (
+      let date = new Date(startDateOnly);
+      date.getTime() <= endDateOnly.getTime();
+      date.setUTCDate(date.getUTCDate() + 1)
+    ) {
+      const winA = { start: null, end: null };
+      const winB = { start: null, end: null };
+      const clipA = { start: null, end: null };
+      const clipB = { start: null, end: null };
+
+      if (crossesMidnight) {
+        winB.start = new Date(date);
+        winB.start.setUTCHours(0, 0, 0, 0);
+
+        winB.end = new Date(date);
+        winB.end.setUTCHours(dailyEndHour, 0, 0, 0);
+
+        clipB.start = new Date(Math.max(sliceStart, winB.start));
+        clipB.end = new Date(Math.min(sliceEnd, winB.end));
+
+        if (clipB.end > clipB.start) {
+          refined.push({
+            ...slice,
+            start: clipB.start.toISOString(),
+            end: clipB.end.toISOString(),
+            duration: (clipB.end - clipB.start) / 60000,
+          });
+        }
+      }
+
+      winA.start = new Date(date);
+      winA.start.setUTCHours(dailyStartHour, 0, 0, 0);
+
+      winA.end = new Date(date);
+      if (crossesMidnight) {
+        winA.end.setUTCHours(24, 0, 0, 0);
+      } else {
+        winA.end.setUTCHours(dailyEndHour, 0, 0, 0);
+      }
+
+      clipA.start = new Date(Math.max(sliceStart, winA.start));
+      clipA.end = new Date(Math.min(sliceEnd, winA.end));
+
+      if (clipA.end > clipA.start) {
+        refined.push({
+          ...slice,
+          start: clipA.start.toISOString(),
+          end: clipA.end.toISOString(),
+          duration: (clipA.end - clipA.start) / 60000,
+        });
+      }
+    }
+  });
+  refined.sort((a, b) => new Date(a.start) - new Date(b.start));
+  return refined;
+};
+
+// groupSlicesIntoBlocks: combine slices that match up into larger blocks of time
+const groupSlicesIntoBlocks = (slices) => {
+  if (slices.length === 0) return [];
+
+  const blocks = [];
+  let currentBlock = { ...slices[0] };
+
+  for (let i = 1; i < slices.length; i += 1) {
+    const nextSlice = slices[i];
+
+    // If the next slice is perfectly adjacent AND has the same player count
+    if (
+      nextSlice.start === currentBlock.end &&
+      JSON.stringify(nextSlice.availablePlayerList) ===
+        JSON.stringify(currentBlock.availablePlayerList)
+    ) {
+      // Just extend the end time of the current block
+      currentBlock.end = nextSlice.end;
+      currentBlock.duration =
+        (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
+    } else {
+      // Otherwise, save the finished block and start a new one
+      blocks.push(currentBlock);
+      currentBlock = { ...nextSlice };
+    }
+  }
+
+  currentBlock.duration =
+    (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
+  blocks.push(currentBlock);
+  return blocks;
+};
 
 class FreeBusy {
   constructor({
@@ -37,15 +152,6 @@ class FreeBusy {
     this._minDuration = minDuration;
     this._prefStartHour = prefStartHour;
     this._prefEndHour = prefEndHour;
-  }
-
-  // gets an OAuth2Client instance (this way we can have multiple)
-  getOAuth2Client() {
-    return new OAuth2Client(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      "postmessage" // Specific value required for GIS popup flow
-    );
   }
 
   // analyzeGroupAvailability: Returns "slices" of time with how many users are available
@@ -95,7 +201,7 @@ class FreeBusy {
     );
     const ownerUsername = ownerToken ? ownerToken.username : null;
 
-    for (let i = 0; i < sortedTimes.length - 1; i++) {
+    for (let i = 0; i < sortedTimes.length - 1; i += 1) {
       const currentTime = sortedTimes[i];
 
       const nextTime = sortedTimes[i + 1];
@@ -117,143 +223,40 @@ class FreeBusy {
 
       // If the GM is in the busy set, we don't even calculate the slice.
       // We just move to the next timestamp.
-      if (ownerUsername && busyUsers.has(ownerUsername)) {
-        continue;
-      }
+      if (!ownerUsername || !busyUsers.has(ownerUsername)) {
+        if (nextTime > currentTime) {
+          const availableUserList = allValidUsernames.filter(
+            (name) => !busyUsers.has(name)
+          );
+          const unavailableUserList = allUsernames.filter(
+            (name) => busyUsers.has(name) || !allValidUsernames.includes(name)
+          );
 
-      if (nextTime > currentTime) {
-        const availableUserList = allValidUsernames.filter(
-          (name) => !busyUsers.has(name)
-        );
-        const unavailableUserList = allUsernames.filter(
-          (name) => busyUsers.has(name) || !allValidUsernames.includes(name)
-        );
-
-        slices.push({
-          start: new Date(currentTime).toISOString(),
-          end: new Date(nextTime).toISOString(),
-          availablePlayers: availableUserList.length,
-          availablePlayerList: [...availableUserList],
-          unavailablePlayerList: [...unavailableUserList],
-          totalUsers: totalUsers,
-          duration: (nextTime - currentTime) / 60000,
-        });
+          slices.push({
+            start: new Date(currentTime).toISOString(),
+            end: new Date(nextTime).toISOString(),
+            availablePlayers: availableUserList.length,
+            availablePlayerList: [...availableUserList],
+            unavailablePlayerList: [...unavailableUserList],
+            totalUsers,
+            duration: (nextTime - currentTime) / 60000,
+          });
+        }
       }
     }
 
     return slices;
   }
 
-  // refineSlices: Filters slices based on a specific daily time window (e.g., 7pm-11pm)
-  refineSlices(slices, dailyStartHour, dailyEndHour) {
-    const refined = [];
-    const crossesMidnight = dailyEndHour < dailyStartHour;
-
-    slices.forEach((slice) => {
-      const sliceStart = new Date(slice.start);
-      const sliceEnd = new Date(slice.end);
-
-      const startDateOnly = new Date(sliceStart);
-      startDateOnly.setUTCHours(0, 0, 0, 0);
-
-      const endDateOnly = new Date(sliceEnd);
-      endDateOnly.setUTCHours(0, 0, 0, 0);
-
-      for (
-        let date = new Date(startDateOnly);
-        date.getTime() <= endDateOnly.getTime();
-        date.setUTCDate(date.getUTCDate() + 1)
-      ) {
-        if (crossesMidnight) {
-          const winB_Start = new Date(date);
-          winB_Start.setUTCHours(0, 0, 0, 0);
-
-          const winB_End = new Date(date);
-          winB_End.setUTCHours(dailyEndHour, 0, 0, 0);
-
-          const clipB_S = new Date(Math.max(sliceStart, winB_Start));
-          const clipB_E = new Date(Math.min(sliceEnd, winB_End));
-
-          if (clipB_E > clipB_S) {
-            refined.push({
-              ...slice,
-              start: clipB_S.toISOString(),
-              end: clipB_E.toISOString(),
-              duration: (clipB_E - clipB_S) / 60000,
-            });
-          }
-        }
-
-        const winA_Start = new Date(date);
-        winA_Start.setUTCHours(dailyStartHour, 0, 0, 0);
-
-        const winA_End = new Date(date);
-        if (crossesMidnight) {
-          winA_End.setUTCHours(24, 0, 0, 0);
-        } else {
-          winA_End.setUTCHours(dailyEndHour, 0, 0, 0);
-        }
-
-        const clipA_S = new Date(Math.max(sliceStart, winA_Start));
-        const clipA_E = new Date(Math.min(sliceEnd, winA_End));
-
-        if (clipA_E > clipA_S) {
-          refined.push({
-            ...slice,
-            start: clipA_S.toISOString(),
-            end: clipA_E.toISOString(),
-            duration: (clipA_E - clipA_S) / 60000,
-          });
-        }
-      }
-    });
-    refined.sort((a, b) => new Date(a.start) - new Date(b.start));
-    return refined;
-  }
-
-  // groupSlicesIntoBlocks: combine slices that match up into larger blocks of time
-  groupSlicesIntoBlocks(slices) {
-    if (slices.length === 0) return [];
-
-    const blocks = [];
-    let currentBlock = { ...slices[0] };
-
-    for (let i = 1; i < slices.length; i++) {
-      const nextSlice = slices[i];
-
-      // If the next slice is perfectly adjacent AND has the same player count
-      if (
-        nextSlice.start === currentBlock.end &&
-        JSON.stringify(nextSlice.availablePlayerList) ===
-          JSON.stringify(currentBlock.availablePlayerList)
-      ) {
-        // Just extend the end time of the current block
-        currentBlock.end = nextSlice.end;
-        currentBlock.duration =
-          (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
-      } else {
-        // Otherwise, save the finished block and start a new one
-        blocks.push(currentBlock);
-        currentBlock = { ...nextSlice };
-      }
-    }
-
-    currentBlock.duration =
-      (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
-    blocks.push(currentBlock);
-    return blocks;
-  }
-
   // Fetch all user access tokens
   async getUserTokens() {
-    // Loop through the userIds, get an access token for each. (did not do this in above loop to avoid making unnecessary calls)
     const result = { error: null, tokens: [] };
-    const oAuth2Client = this.getOAuth2Client();
+    const oAuth2Client = getOAuth2Client();
 
-    for (let u = 0; u < this._usersToGetTokens.length; u++) {
+    /* eslint-disable no-await-in-loop */
+    for (let u = 0; u < this._usersToGetTokens.length; u += 1) {
       const user = this._usersToGetTokens[u];
       const isOwner = user._id.toString() === this._ownerId;
-
       try {
         oAuth2Client.setCredentials({
           refresh_token: user.googleRefreshToken,
@@ -283,7 +286,8 @@ class FreeBusy {
             "Your Google Calendar is disconnected. Cannot search for availability. Please reconnect your account and try again."
           );
           return result;
-        } else if (err.message.includes("invalid_grant")) {
+        }
+        if (err.message.includes("invalid_grant")) {
           // log as disconnected
           this._disconnectedUsers.push(user.username);
         } else {
@@ -294,6 +298,8 @@ class FreeBusy {
         }
       }
     }
+    /* eslint-enable no-await-in-loop */
+
     if (!result.tokens.length) {
       result.error = new BadRequestError(
         "Could not verify any users with Google"
@@ -368,8 +374,9 @@ class FreeBusy {
   async getBusyIntervals(calendarList) {
     const result = { error: null, busyIntervals: [] };
 
-    for (let i = 0; i < calendarList.length; i++) {
-      const user = calendarList[i].user;
+    /* eslint-disable no-await-in-loop */
+    for (let i = 0; i < calendarList.length; i += 1) {
+      const { user } = calendarList[i];
       const thisUsersCalendarList = calendarList[i].calendarList;
       const userError = calendarList[i].error;
       if (!userError) {
@@ -397,11 +404,11 @@ class FreeBusy {
 
           let thisUserCombined = [];
 
-          let hasErrors = [];
+          const hasErrors = [];
 
           Object.values(data.calendars).forEach((cal) => {
             if (cal.errors) {
-              //Google returned some error, log as disconnected
+              // Google returned some error, log as disconnected
               hasErrors.push(cal.errors);
             } else if (cal.busy && cal.busy.length > 0) {
               // ALL SET, log as valid, and add all busy slots to the allBusyIntervals array (including the username of the busy person)
@@ -421,6 +428,8 @@ class FreeBusy {
         }
       }
     }
+    /* eslint-enable no-await-in-loop */
+
     if (this._disconnectedUsers.length > this._minUsers) {
       result.error = new BadRequestError(
         "Could not get enough user calendar data from Google to satisfy the minimum user count"
@@ -466,15 +475,14 @@ class FreeBusy {
       );
 
       // Filter slices where the required minimum number of users are available
-      const filteredSlices = allSlices.filter((slice) => {
-        return slice.availablePlayers >= this._minUsers;
-      });
+      const filteredSlices = allSlices.filter(
+        (slice) => slice.availablePlayers >= this._minUsers
+      );
 
       let refinedSlices;
       // Refine to match preferred start/end time window and duration (if set to -1 then just check for duration)
       if (this._prefStartHour !== -1 && this._prefEndHour !== -1) {
-        // GM has a preference - run the "Cookie Cutter"
-        refinedSlices = this.refineSlices(
+        refinedSlices = refineSlices(
           filteredSlices,
           this._prefStartHour,
           this._prefEndHour
@@ -493,13 +501,11 @@ class FreeBusy {
       refinedSlices.sort((a, b) => new Date(a.start) - new Date(b.start));
 
       // Stitch them together so "7-8pm" and "8-9pm" become "7-9pm"
-      let stitchedBlocks = this.groupSlicesIntoBlocks(refinedSlices);
+      const stitchedBlocks = groupSlicesIntoBlocks(refinedSlices);
 
       // final filter for duration and sorting by available players first (for "best available matches")
       const blocks = stitchedBlocks
-        .filter((slice) => {
-          return slice.duration >= this._minDuration;
-        })
+        .filter((slice) => slice.duration >= this._minDuration)
         .sort((a, b) => {
           // Primary Sort: availablePlayers (Descending: 4, 3, 2...)
           if (b.availablePlayers !== a.availablePlayers) {
