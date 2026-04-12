@@ -6,9 +6,6 @@
   - GET /groups/:groupId - Gets a single group
   - PATCH /groups/:groupId - Updates a group's details
   - GET /groups/:groupId/applications - Lists applications for a group (can be filtered)
-  - POST /groups/:groupId/applications - Adds an application
-  - GET / groups/:groupId/applications/:appId - Gets a single application
-  - PATCH /groups/:groupId/applications/:appId - Updates an application
   - GET /groups/:groupId/sessions - Lists sessions for a group (can be filtered)
 */
 const router = require("express").Router();
@@ -26,10 +23,7 @@ const {
   createGroup,
   getGroup,
   editGroup,
-  submitApplication,
   getApplications,
-  getApplication,
-  updateApplicationStatus,
   getSessions,
 } = require("../controllers/groups");
 
@@ -51,32 +45,6 @@ router.get(
   requireAuth,
   validateGroupId,
   getApplications
-);
-
-// add application
-router.post(
-  "/:groupId/applications",
-  requireAuth,
-  validateGroupId,
-  validateApplicationData,
-  submitApplication
-);
-
-// get application
-router.get(
-  "/:groupId/applications/:appId",
-  requireAuth,
-  validateGroupId,
-  validateApplicationId,
-  getApplication
-);
-
-// update application status
-router.patch(
-  "/:groupId/applications/:appId",
-  requireAuth,
-  validateGroupAndApplicationId,
-  updateApplicationStatus
 );
 
 // get group sessions

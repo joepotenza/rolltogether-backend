@@ -216,6 +216,11 @@ module.exports.validateApplicationData = celebrate({
       "any.required": "The 'message' field is required",
       "string.empty": "The 'message' field must be filled in",
     }),
+    groupId: Joi.string().required().custom(validateMongooseObjectId).messages({
+      "any.required": "The 'groupId' field is required",
+      "string.empty": "The 'groupId' field must be filled in",
+      "string.objectId": "The 'groupId' field must be a valid object Id",
+    }),
   }),
 });
 
@@ -245,15 +250,15 @@ module.exports.validateGroupAndApplicationId = celebrate({
       "any.required": "The 'status' field is required",
       "any.only": "The 'status' field must be one of ['approved','denied']",
     }),
-    response: Joi.string().optional().allow(""),
-  }),
-
-  params: Joi.object().keys({
     groupId: Joi.string().required().custom(validateMongooseObjectId).messages({
       "any.required": "The 'groupId' field is required",
       "string.empty": "The 'groupId' field must be filled in",
       "string.objectId": "The 'groupId' field must be a valid object Id",
     }),
+    response: Joi.string().optional().allow(""),
+  }),
+
+  params: Joi.object().keys({
     appId: Joi.string().required().custom(validateMongooseObjectId).messages({
       "any.required": "The 'appId' field is required",
       "string.empty": "The 'appId' field must be filled in",
