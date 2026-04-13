@@ -6,7 +6,6 @@
   updateApplicationStatus
 */
 
-const mongoose = require("mongoose");
 const Application = require("../models/application");
 const Group = require("../models/group");
 
@@ -14,7 +13,6 @@ const BadRequestError = require("../errors/BadRequestError");
 const ForbiddenError = require("../errors/ForbiddenError");
 const NotFoundError = require("../errors/NotFoundError");
 const ConflictError = require("../errors/ConflictError");
-const UnauthorizedError = require("../errors/UnauthorizedError");
 
 const { sendEmailMessage } = require("../utils/email");
 

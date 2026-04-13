@@ -24,6 +24,7 @@ function sendEmailMessage({ to, subject, text, html }) {
     });
     return data;
   } catch (error) {
+    // For now we silently log to console when emails fail (happens a lot in sandbox)
     console.error(error);
   }
 }

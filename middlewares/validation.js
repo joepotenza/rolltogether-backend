@@ -39,21 +39,25 @@ const validateMongooseObjectId = (value, helpers) => {
 
 module.exports.validateUserData = celebrate({
   body: Joi.object().keys({
-    name: Joi.string().required().min(1).max(30).messages({
+    name: Joi.string().required().max(30).messages({
       "any.required": "The 'name' field is required",
-      "string.min": "The minimum length of the 'name' field is 1",
       "string.max": "The maximum length of the 'name' field is 30",
       "string.empty": "The 'name' field must be filled in",
     }),
 
-    username: Joi.string().required().min(3).max(20).alphanum().messages({
-      "any.required": "The 'username' field is required",
-      "string.min": "The minimum length of the 'username' field is 3",
-      "string.max": "The maximum length of the 'username' field is 20",
-      "string.alphanum":
-        "The 'username' field may only contain letters and numbers",
-      "string.empty": "The 'username' field must be filled in",
-    }),
+    username: Joi.string()
+      .required()
+      .min(3)
+      .max(20)
+      .pattern(/^[a-zA-Z0-9_]+$/)
+      .messages({
+        "any.required": "The 'username' field is required",
+        "string.min": "The minimum length of the 'username' field is 3",
+        "string.max": "The maximum length of the 'username' field is 20",
+        "string.pattern.base":
+          "The 'username' field may only contain letters and numbers",
+        "string.empty": "The 'username' field must be filled in",
+      }),
 
     email: Joi.string().required().email().messages({
       "any.required": "The 'email' field is required",
@@ -61,9 +65,10 @@ module.exports.validateUserData = celebrate({
       "string.email": "The 'email' field must be a valid email address",
     }),
 
-    password: Joi.string().required().messages({
+    password: Joi.string().required().min(8).messages({
       "any.required": "The 'password' field is required",
       "string.empty": "The 'password' field must be filled in",
+      "string.min": "The minimum length of the 'password' field is 8",
     }),
 
     avatar: Joi.string().required().custom(validateSVG).messages({
@@ -77,9 +82,8 @@ module.exports.validateUserData = celebrate({
 
 module.exports.validateUserDataForUpdate = celebrate({
   body: Joi.object().keys({
-    name: Joi.string().required().min(2).max(30).messages({
+    name: Joi.string().required().max(30).messages({
       "any.required": "The 'name' field is required",
-      "string.min": "The minimum length of the 'name' field is 2",
       "string.max": "The maximum length of the 'name' field is 30",
       "string.empty": "The 'name' field must be filled in",
     }),
@@ -135,6 +139,63 @@ module.exports.validateOAuthCallbackData = celebrate({
  * GROUP VALIDATION
  */
 
+module.exports.validateGroupFilters = celebrate({
+  query: Joi.object().keys({
+    userId: Joi.string()
+      .optional()
+      .allow("")
+      .custom(validateMongooseObjectId)
+      .messages({
+        "string.objectId": "The 'userId' field must be a valid object Id",
+      }),
+
+    owner: Joi.string()
+      .optional()
+      .allow("")
+      .custom(validateMongooseObjectId)
+      .messages({
+        "string.objectId": "The 'owner' field must be a valid object Id",
+      }),
+
+    member: Joi.string()
+      .optional()
+      .allow("")
+      .custom(validateMongooseObjectId)
+      .messages({
+        "string.objectId": "The 'member' field must be a valid object Id",
+      }),
+
+    system: Joi.string()
+      .optional()
+      .allow("")
+      .length(24)
+      .custom(validateMongooseObjectId)
+      .messages({
+        "string.length": "The 'system' field must be a valid object Id",
+        "string.objectId": "The 'system' field must be a valid object Id",
+      }),
+
+    type: Joi.string()
+      .optional()
+      .allow("")
+      .valid("online", "hybrid", "inperson")
+      .messages({
+        "any.only":
+          "The 'type' field must be one of ['online','hybrid','inperson']",
+      }),
+
+    isHomebrew: Joi.boolean().optional().allow("").messages({
+      "boolean.base": "The 'isHomebrew' field must be a boolean",
+    }),
+
+    story: Joi.string().optional().allow(""),
+
+    openSlots: Joi.boolean().optional().allow("").messages({
+      "boolean.base": "The 'openSlots' field must be a boolean",
+    }),
+  }),
+});
+
 module.exports.validateGroupData = celebrate({
   body: Joi.object().keys({
     name: Joi.string().required().min(3).max(300).messages({
@@ -157,6 +218,7 @@ module.exports.validateGroupData = celebrate({
 
     isHomebrew: Joi.boolean().required().messages({
       "any.required": "The 'isHomebrew' field is required",
+      "boolean.base": "The 'isHomebrew' field must be a boolean",
     }),
 
     story: Joi.string().optional().allow(""),

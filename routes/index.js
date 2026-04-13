@@ -3,6 +3,8 @@
   Main route controller that filters REST calls to the appropriate router
   - POST /signup - Registers a new user
   - POST /signin - Authorizes a user for login
+  - POST /oauth2callback - Handles OAuth2 callback when user links their Google account
+  - POST /revokeoauth2 - Revokes user's OAuth2 token for Google account
 */
 const router = require("express").Router();
 // const addArtificialDelay = require("../middlewares/delay");

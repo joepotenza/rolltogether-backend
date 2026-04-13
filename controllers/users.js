@@ -143,7 +143,6 @@ const updateUserInfo = (req, res, next) => {
         } else if (err.name === "ValidationError") {
           next(new BadRequestError("Invalid Data"));
         } else if (err.code && err.code === 11000) {
-          console.log(err);
           next(new ConflictError("Email address already exists"));
         } else {
           next(err);
@@ -205,7 +204,6 @@ const createUser = (req, res, next) => {
             if (err.name === "ValidationError") {
               next(new BadRequestError("Invalid Data"));
             } else if (err.code && err.code === 11000) {
-              console.log(err);
               next(new ConflictError("Username or email already exists"));
             } else {
               next(err);
@@ -415,7 +413,6 @@ const freebusy = (req, res, next) => {
         // Check if current user is owner
         const ownerId = grp.owner._id.toString();
         if (!ownerId === req.user._id) {
-          console.log("User is not owner!");
           next(new ForbiddenError("You are not the owner of this group"));
         } else {
           const usersToGetTokens = []; // array of users to match with google

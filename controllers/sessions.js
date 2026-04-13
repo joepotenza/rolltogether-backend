@@ -47,7 +47,6 @@ const createSession = (req, res, next) => {
             attendees,
           })
             .then((session) => {
-              console.log("session added");
               Group.findByIdAndUpdate(group, {
                 $addToSet: { sessions: session._id },
               })

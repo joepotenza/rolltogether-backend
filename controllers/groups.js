@@ -13,19 +13,18 @@ const mongoose = require("mongoose");
 const Session = require("../models/session");
 /* eslint-disable no-unused-vars */
 const Application = require("../models/application");
-const System = require("../models/system"); // This is here just to ensure the system model is loaded into mongoose
-/* eslint-disable no-unused-vars */
+const System = require("../models/system"); // This is here just to ensure the system/application model is loaded into mongoose
+/* eslint-enable no-unused-vars */
 const Group = require("../models/group");
 
 const BadRequestError = require("../errors/BadRequestError");
 const ForbiddenError = require("../errors/ForbiddenError");
 const NotFoundError = require("../errors/NotFoundError");
-const ConflictError = require("../errors/ConflictError");
 const UnauthorizedError = require("../errors/UnauthorizedError");
 
-const { sendEmailMessage } = require("../utils/email");
+// const { sendEmailMessage } = require("../utils/email");
 
-const { FRONTEND_URL } = process.env;
+// const { FRONTEND_URL } = process.env;
 
 // GET /groups -- Get a list of groups
 // (LOTS of filtering here. Comments below.)
@@ -73,7 +72,7 @@ const getGroups = (req, res, next) => {
     if (type) filters.push({ type });
 
     // Search only for games with open slots?
-    if (openSlots === "true") {
+    if (openSlots) {
       filters.push({ "slots.open": { $gt: 0 } });
     }
 
@@ -120,8 +119,6 @@ const getGroups = (req, res, next) => {
 
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 20), 100);
     const finalFilter = filters.length ? { $and: filters } : {};
-
-    console.log(JSON.stringify(finalFilter));
 
     Group.find(finalFilter)
       .sort({ createdAt: -1, _id: -1 })

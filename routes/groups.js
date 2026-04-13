@@ -12,11 +12,9 @@ const router = require("express").Router();
 const { /* readAuth, */ requireAuth } = require("../middlewares/auth");
 // const addArtificialDelay = require("../middlewares/delay");
 const {
+  validateGroupFilters,
   validateGroupData,
   validateGroupId,
-  validateApplicationData,
-  validateApplicationId,
-  validateGroupAndApplicationId,
 } = require("../middlewares/validation");
 const {
   getGroups,
@@ -28,7 +26,7 @@ const {
 } = require("../controllers/groups");
 
 // group list
-router.get("", getGroups);
+router.get("", validateGroupFilters, getGroups);
 
 // add group
 router.post("", requireAuth, validateGroupData, createGroup);
