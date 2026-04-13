@@ -26,7 +26,7 @@ router.get("/me", requireAuth, getCurrentUser);
 router.patch("/me", requireAuth, validateUserDataForUpdate, updateUserInfo);
 
 // Get a user's public profile
-router.get("/:username", requireAuth, getUserProfile);
+router.get("/:username", readAuth, getUserProfile);
 
 // Match users' calendars
 router.post("/freebusy", requireAuth, validateFreeBusyData, freebusy);
