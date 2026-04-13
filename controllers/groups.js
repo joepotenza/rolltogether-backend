@@ -12,6 +12,7 @@
 const mongoose = require("mongoose");
 const Session = require("../models/session");
 /* eslint-disable no-unused-vars */
+const Application = require("../models/application");
 const System = require("../models/system"); // This is here just to ensure the system model is loaded into mongoose
 /* eslint-disable no-unused-vars */
 const Group = require("../models/group");
