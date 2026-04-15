@@ -376,6 +376,10 @@ const revokeoauth2 = (req, res, next) => {
 };
 
 // POST /users/freebusy
+/**
+ * NOTE: Reverted to more basic version until all bugs are gone
+ * Will only search a time window and return the busy intervals
+ */
 const freebusy = (req, res, next) => {
   try {
     const {
@@ -383,10 +387,10 @@ const freebusy = (req, res, next) => {
       userIds,
       start,
       end,
-      minUsers,
+      /* minUsers,
       minDuration,
       prefStartHour,
-      prefEndHour,
+      prefEndHour, */
     } = req.body;
 
     // Automatically adjust end date by 1 day
@@ -488,6 +492,7 @@ const freebusy = (req, res, next) => {
 
           const totalConnected = usersToGetTokens.length;
 
+          /*
           if (totalConnected < minUsers) {
             const missingCount = minUsers - totalConnected;
 
@@ -495,6 +500,12 @@ const freebusy = (req, res, next) => {
               `Cannot check availability: You requested a minimum of ${minUsers} players, ` +
                 `but only ${totalConnected} participants have connected Google Calendars. ` +
                 `You need at least ${missingCount} more member(s) to link their accounts.`
+            );
+          } */
+
+          if (totalConnected < 2) {
+            throw new BadRequestError(
+              `Cannot check availability: need at least 2 connected calendars.`
             );
           }
 
@@ -505,10 +516,10 @@ const freebusy = (req, res, next) => {
             usersToGetTokens,
             startDate,
             endDate,
-            minUsers,
+            /* minUsers,
             minDuration,
             prefStartHour,
-            prefEndHour,
+            prefEndHour, */
           });
           const result = await freeBusy.process();
           if (result.error) {

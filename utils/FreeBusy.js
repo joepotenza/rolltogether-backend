@@ -6,6 +6,8 @@
 
   Simple call "freeBusy = new FreeBusy()" with the necessary arguments, and then "freebusy.process()"
   to return the result of all the scheduling magic.
+
+  NOTE: REVERTED TO A MORE BASIC VERSION UNTIL ALL BUGS ARE GONE
 */
 
 const { OAuth2Client } = require("google-auth-library");
@@ -22,111 +24,6 @@ const getOAuth2Client = () =>
     "postmessage" // Specific value required for GIS popup flow
   );
 
-// refineSlices: Filters slices based on a specific daily time window (e.g., 7pm-11pm)
-const refineSlices = (slices, dailyStartHour, dailyEndHour) => {
-  const refined = [];
-  const crossesMidnight = dailyEndHour < dailyStartHour;
-
-  slices.forEach((slice) => {
-    const sliceStart = new Date(slice.start);
-    const sliceEnd = new Date(slice.end);
-
-    const startDateOnly = new Date(sliceStart);
-    startDateOnly.setUTCHours(0, 0, 0, 0);
-
-    const endDateOnly = new Date(sliceEnd);
-    endDateOnly.setUTCHours(0, 0, 0, 0);
-
-    for (
-      let date = new Date(startDateOnly);
-      date.getTime() <= endDateOnly.getTime();
-      date.setUTCDate(date.getUTCDate() + 1)
-    ) {
-      const winA = { start: null, end: null };
-      const winB = { start: null, end: null };
-      const clipA = { start: null, end: null };
-      const clipB = { start: null, end: null };
-
-      if (crossesMidnight) {
-        winB.start = new Date(date);
-        winB.start.setUTCHours(0, 0, 0, 0);
-
-        winB.end = new Date(date);
-        winB.end.setUTCHours(dailyEndHour, 0, 0, 0);
-
-        clipB.start = new Date(Math.max(sliceStart, winB.start));
-        clipB.end = new Date(Math.min(sliceEnd, winB.end));
-
-        if (clipB.end > clipB.start) {
-          refined.push({
-            ...slice,
-            start: clipB.start.toISOString(),
-            end: clipB.end.toISOString(),
-            duration: (clipB.end - clipB.start) / 60000,
-          });
-        }
-      }
-
-      winA.start = new Date(date);
-      winA.start.setUTCHours(dailyStartHour, 0, 0, 0);
-
-      winA.end = new Date(date);
-      if (crossesMidnight) {
-        winA.end.setUTCHours(24, 0, 0, 0);
-      } else {
-        winA.end.setUTCHours(dailyEndHour, 0, 0, 0);
-      }
-
-      clipA.start = new Date(Math.max(sliceStart, winA.start));
-      clipA.end = new Date(Math.min(sliceEnd, winA.end));
-
-      if (clipA.end > clipA.start) {
-        refined.push({
-          ...slice,
-          start: clipA.start.toISOString(),
-          end: clipA.end.toISOString(),
-          duration: (clipA.end - clipA.start) / 60000,
-        });
-      }
-    }
-  });
-  refined.sort((a, b) => new Date(a.start) - new Date(b.start));
-  return refined;
-};
-
-// groupSlicesIntoBlocks: combine slices that match up into larger blocks of time
-const groupSlicesIntoBlocks = (slices) => {
-  if (slices.length === 0) return [];
-
-  const blocks = [];
-  let currentBlock = { ...slices[0] };
-
-  for (let i = 1; i < slices.length; i += 1) {
-    const nextSlice = slices[i];
-
-    // If the next slice is perfectly adjacent AND has the same player count
-    if (
-      nextSlice.start === currentBlock.end &&
-      JSON.stringify(nextSlice.availablePlayerList) ===
-        JSON.stringify(currentBlock.availablePlayerList)
-    ) {
-      // Just extend the end time of the current block
-      currentBlock.end = nextSlice.end;
-      currentBlock.duration =
-        (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
-    } else {
-      // Otherwise, save the finished block and start a new one
-      blocks.push(currentBlock);
-      currentBlock = { ...nextSlice };
-    }
-  }
-
-  currentBlock.duration =
-    (new Date(currentBlock.end) - new Date(currentBlock.start)) / 60000;
-  blocks.push(currentBlock);
-  return blocks;
-};
-
 class FreeBusy {
   constructor({
     ownerId,
@@ -135,10 +32,6 @@ class FreeBusy {
     disconnectedUsers,
     startDate,
     endDate,
-    minUsers,
-    minDuration,
-    prefStartHour,
-    prefEndHour,
   }) {
     this._ownerId = ownerId.toString();
     this._allUsers = allUsers; // array of ALL users, before any searching and filtering
@@ -148,104 +41,6 @@ class FreeBusy {
     this._tokens = {}; // Access token cache
     this._startDate = startDate;
     this._endDate = endDate;
-    this._minUsers = minUsers;
-    this._minDuration = minDuration;
-    this._prefStartHour = prefStartHour;
-    this._prefEndHour = prefEndHour;
-  }
-
-  // analyzeGroupAvailability: Returns "slices" of time with how many users are available
-  analyzeGroupAvailability(
-    windowStart,
-    windowEnd,
-    allBusyIntervals,
-    totalUsers
-  ) {
-    const points = [];
-    const start = new Date(windowStart).getTime();
-    const end = new Date(windowEnd).getTime();
-
-    // 1. Collect Points
-    allBusyIntervals.forEach((busy) => {
-      const s = new Date(busy.start).getTime();
-      const e = new Date(busy.end).getTime();
-      if (s < end && e > start) {
-        points.push({ time: Math.max(s, start), type: 1, user: busy.username });
-        points.push({ time: Math.min(e, end), type: -1, user: busy.username });
-      }
-    });
-    points.push({ time: start, type: 0 }, { time: end, type: 0 });
-
-    // 2. Sort: Time ASC, then Type DESC (Starts [1] first)
-    points.sort((a, b) =>
-      a.time !== b.time ? a.time - b.time : b.type - a.type
-    );
-
-    // 3. Group by timestamp to handle simultaneous changes (like the 4/13 04:00:00 tie)
-    const timeMap = new Map();
-    points.forEach((p) => {
-      if (!timeMap.has(p.time)) timeMap.set(p.time, []);
-      timeMap.get(p.time).push(p);
-    });
-
-    const sortedTimes = Array.from(timeMap.keys()).sort((a, b) => a - b);
-
-    const slices = [];
-    const busyUsers = new Map();
-    const allUsernames = this._allUsers;
-    const allValidUsernames = this._validUsers;
-
-    // Identify the Owner's username for the Master Filter
-    const ownerToken = this._tokens.find(
-      (t) => t._id.toString() === this._ownerId
-    );
-    const ownerUsername = ownerToken ? ownerToken.username : null;
-
-    for (let i = 0; i < sortedTimes.length - 1; i += 1) {
-      const currentTime = sortedTimes[i];
-
-      const nextTime = sortedTimes[i + 1];
-
-      // Update the busy-user counts for every change happening at this exact millisecond
-      timeMap.get(currentTime).forEach((p) => {
-        if (p.type === 1 && p.user) {
-          busyUsers.set(p.user, (busyUsers.get(p.user) || 0) + 1);
-        }
-        if (p.type === -1 && p.user) {
-          const count = (busyUsers.get(p.user) || 1) - 1;
-          if (count > 0) {
-            busyUsers.set(p.user, count);
-          } else {
-            busyUsers.delete(p.user);
-          }
-        }
-      });
-
-      // If the GM is in the busy set, we don't even calculate the slice.
-      // We just move to the next timestamp.
-      if (!ownerUsername || !busyUsers.has(ownerUsername)) {
-        if (nextTime > currentTime) {
-          const availableUserList = allValidUsernames.filter(
-            (name) => !busyUsers.has(name)
-          );
-          const unavailableUserList = allUsernames.filter(
-            (name) => busyUsers.has(name) || !allValidUsernames.includes(name)
-          );
-
-          slices.push({
-            start: new Date(currentTime).toISOString(),
-            end: new Date(nextTime).toISOString(),
-            availablePlayers: availableUserList.length,
-            availablePlayerList: [...availableUserList],
-            unavailablePlayerList: [...unavailableUserList],
-            totalUsers,
-            duration: (nextTime - currentTime) / 60000,
-          });
-        }
-      }
-    }
-
-    return slices;
   }
 
   // Fetch all user access tokens
@@ -359,7 +154,7 @@ class FreeBusy {
       result.calendars = await Promise.all(
         this._tokens.map((user) => this.getUserCalendarList(user))
       );
-      if (this._disconnectedUsers.length > this._minUsers) {
+      if (result.calendars.length < 2) {
         result.error = new BadRequestError(
           "Could not get enough user calendars from Google to satisfy the minimum user count"
         );
@@ -372,7 +167,7 @@ class FreeBusy {
 
   // Get all busy intervals for users with tokens
   async getBusyIntervals(calendarList) {
-    const result = { error: null, busyIntervals: [] };
+    const result = { error: null, busyIntervals: {}, total: 0 };
 
     /* eslint-disable no-await-in-loop */
     for (let i = 0; i < calendarList.length; i += 1) {
@@ -400,8 +195,6 @@ class FreeBusy {
         if (!data.calendars) {
           this._disconnectedUsers.push(user.username);
         } else {
-          this._validUsers.push(user.username);
-
           let thisUserCombined = [];
 
           const hasErrors = [];
@@ -422,19 +215,78 @@ class FreeBusy {
 
           if (hasErrors.length > 0) {
             this._disconnectedUsers.push(user.username);
+          } else {
+            this._validUsers.push(user.username);
           }
 
-          result.busyIntervals = [...result.busyIntervals, ...thisUserCombined];
+          result.busyIntervals[user.username] = thisUserCombined;
+          result.total += thisUserCombined.length;
         }
       }
     }
     /* eslint-enable no-await-in-loop */
 
-    if (this._disconnectedUsers.length > this._minUsers) {
+    if (this._validUsers.length < 2) {
       result.error = new BadRequestError(
         "Could not get enough user calendar data from Google to satisfy the minimum user count"
       );
     }
+    return result;
+  }
+
+  /*
+    buildBlocks: Build a grid of 30-minute intervals from start to finish for each user and mark as free/busy
+    Output should look like this:
+    [
+      {
+        start: [date],
+        end:   [date+30],
+        users:{
+          username: "busy",
+          username2: "free"
+          ...
+        }
+      }
+    ]
+  */
+  buildBlocks(allBusyIntervals) {
+    const result = [];
+    // console.log("Building blocks for ", allBusyIntervals);
+    const theEnd = new Date(this._endDate);
+    const windowStart = new Date(this._startDate);
+    const windowEnd = new Date(this._startDate);
+    windowEnd.setMinutes(windowEnd.getMinutes() + 30);
+    while (windowEnd <= theEnd) {
+      // console.log("Window: ", windowStart, " - ", windowEnd);
+
+      const thisWindow = {
+        start: new Date(windowStart),
+        end: new Date(windowEnd),
+        users: {},
+      };
+
+      Object.entries(allBusyIntervals).forEach(([username, intervals]) => {
+        // console.log(`-Checking ${username}`);
+        thisWindow.users[username] = "free";
+
+        if (
+          intervals.some(
+            (interval) =>
+              windowStart >= new Date(interval.start) &&
+              windowEnd <= new Date(interval.end)
+          )
+        ) {
+          // console.log(`---busy!`);
+          thisWindow.users[username] = "busy";
+        }
+      });
+
+      result.push(thisWindow);
+      windowStart.setMinutes(windowStart.getMinutes() + 30);
+      windowEnd.setMinutes(windowEnd.getMinutes() + 30);
+    }
+
+    // console.log(result);
     return result;
   }
 
@@ -465,61 +317,26 @@ class FreeBusy {
         return result;
       }
 
-      // ANALYZE AVAILABILITY
-      const totalUsers = this._validUsers.length;
-      const allSlices = this.analyzeGroupAvailability(
-        this._startDate,
-        this._endDate,
-        allBusyIntervals.busyIntervals,
-        totalUsers
-      );
-
-      // Filter slices where the required minimum number of users are available
-      const filteredSlices = allSlices.filter(
-        (slice) => slice.availablePlayers >= this._minUsers
-      );
-
-      let refinedSlices;
-      // Refine to match preferred start/end time window and duration (if set to -1 then just check for duration)
-      if (this._prefStartHour !== -1 && this._prefEndHour !== -1) {
-        refinedSlices = refineSlices(
-          filteredSlices,
-          this._prefStartHour,
-          this._prefEndHour
-        );
-      } else {
-        // No time-of-day preference - just filter by duration
-        refinedSlices = filteredSlices.filter((slice) => {
-          const duration =
-            (new Date(slice.end) - new Date(slice.start)) / 60000;
-
-          return duration >= this._minDuration;
-        });
+      if (!allBusyIntervals.total) {
+        /*
+         Nobody is busy at all for the selected window. Don't bother doing anything.
+        */
+        // console.log("Nobody is busy ", allBusyIntervals);
+        return {
+          validUsers: this._validUsers,
+          disconnectedUsers: this._disconnectedUsers,
+          nobodyBusy: true,
+        };
       }
 
-      // Sort refinedSlices by start time before stitching
-      refinedSlices.sort((a, b) => new Date(a.start) - new Date(b.start));
-
-      // Stitch them together so "7-8pm" and "8-9pm" become "7-9pm"
-      const stitchedBlocks = groupSlicesIntoBlocks(refinedSlices);
-
-      // final filter for duration and sorting by available players first (for "best available matches")
-      const blocks = stitchedBlocks
-        .filter((slice) => slice.duration >= this._minDuration)
-        .sort((a, b) => {
-          // Primary Sort: availablePlayers (Descending: 4, 3, 2...)
-          if (b.availablePlayers !== a.availablePlayers) {
-            return b.availablePlayers - a.availablePlayers;
-          }
-
-          // Secondary Sort: Start Date (Ascending: Monday, Tuesday...)
-          return new Date(a.start) - new Date(b.start);
-        });
+      // Build a grid of 30-minute intervals from start to finish for each user and mark as free/busy
+      const blocks = this.buildBlocks(allBusyIntervals.busyIntervals);
 
       return {
         blocks,
         validUsers: this._validUsers,
         disconnectedUsers: this._disconnectedUsers,
+        nobodyBusy: false,
       };
     } catch (err) {
       result.error = err;

@@ -409,7 +409,7 @@ module.exports.validateFreeBusyData = celebrate({
       "date.empty": "The 'end' field must be filled in",
       "date.format": "The 'end' field must be a valid date",
     }),
-
+    /*
     minUsers: Joi.number().required().min(1).integer().messages({
       "any.required": " The 'minUsers' field is required",
       "number.min": "Mininum users must be at least 1",
@@ -432,7 +432,7 @@ module.exports.validateFreeBusyData = celebrate({
       "number.min": "'prefEndHour' must be at least 1",
       "number.integer": "'prefEndHour' must be an integer",
     }),
-
+*/
     userIds: Joi.array()
       .items(Joi.string().length(24).custom(validateMongooseObjectId))
       .messages({
