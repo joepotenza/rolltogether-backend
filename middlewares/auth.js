@@ -42,6 +42,8 @@ const auth = ({ req, next, required }) => {
     } catch (err) {
       if (err.name === "JsonWebTokenError") {
         next(new UnauthorizedError("Invalid authorization"));
+      } else if (err.name === "TokenExpiredError") {
+        next(new UnauthorizedError("Authorization expired"));
       } else {
         next(err);
       }
